@@ -1,7 +1,4 @@
-fastapi
-uvicorn[standard]
-yfinance
-feedparser
 streamlit
 pandas
 plotly
+yfinance
