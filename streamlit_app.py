@@ -307,51 +307,90 @@ def hospital_frame() -> pd.DataFrame:
 
 def style_app() -> None:
     dark = st.session_state.theme == "Dark"
-    background = "#0f172a" if dark else "#f6fbff"
-    surface = "#172033" if dark else "#ffffff"
-    text = "#e5edf7" if dark else "#102033"
-    muted = "#9fb0c7" if dark else "#607086"
-    line = "#334155" if dark else "#d8e6ef"
+    background = "#08111f" if dark else "#eef7fb"
+    surface = "#111c2e" if dark else "#ffffff"
+    soft_surface = "#14243a" if dark else "#f8fcff"
+    text = "#ecf5ff" if dark else "#102033"
+    muted = "#a8bad1" if dark else "#5e7087"
+    line = "#29415c" if dark else "#d8e7ef"
+    button_text = "#ffffff" if dark else "#0f2f3c"
 
     st.markdown(
         f"""
         <style>
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+          html, body, [class*="css"] {{
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          }}
           .stApp {{
-            background: {background};
+            background:
+              radial-gradient(circle at 18% 0%, rgba(45, 212, 191, 0.18), transparent 34rem),
+              radial-gradient(circle at 92% 12%, rgba(56, 189, 248, 0.16), transparent 30rem),
+              linear-gradient(180deg, {background} 0%, {background} 100%);
             color: {text};
           }}
           .main .block-container {{
-            padding-top: 1rem;
-            padding-bottom: 2rem;
+            padding-top: 1.15rem;
+            padding-bottom: 2.4rem;
             max-width: 1280px;
           }}
           h1, h2, h3 {{
             letter-spacing: 0 !important;
             color: {text};
           }}
+          h1 {{
+            font-weight: 800 !important;
+          }}
+          .stSidebar {{
+            background: {surface};
+            border-right: 1px solid {line};
+          }}
           [data-testid="stMetric"], .care-card {{
             background: {surface};
             border: 1px solid {line};
-            border-radius: 8px;
-            padding: 1rem;
-            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+            border-radius: 18px;
+            padding: 1.05rem;
+            box-shadow: 0 18px 46px rgba(15, 23, 42, 0.09);
+          }}
+          [data-testid="stMetric"] {{
+            border-left: 4px solid #14b8a6;
+          }}
+          [data-testid="stMetricValue"] {{
+            font-size: 1.45rem;
+            font-weight: 800;
           }}
           .hero {{
-            min-height: 360px;
-            border-radius: 0;
-            padding: 3rem 2rem;
+            min-height: 430px;
+            border-radius: 24px;
+            padding: 3.4rem 2.6rem;
             background:
-              linear-gradient(90deg, rgba(6, 95, 70, 0.92), rgba(14, 116, 144, 0.76)),
+              linear-gradient(90deg, rgba(4, 47, 46, 0.92), rgba(14, 116, 144, 0.75), rgba(12, 74, 110, 0.46)),
               url("https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=1600&q=80");
             background-size: cover;
             background-position: center;
             color: white;
             display: flex;
             align-items: center;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 28px 80px rgba(15, 23, 42, 0.22);
+          }}
+          .hero:after {{
+            content: "";
+            position: absolute;
+            inset: auto 2rem 2rem auto;
+            width: 230px;
+            height: 230px;
+            border: 1px solid rgba(255, 255, 255, .22);
+            border-radius: 999px;
+          }}
+          .hero-content {{
+            position: relative;
+            z-index: 1;
           }}
           .hero h1 {{
             color: white;
-            max-width: 760px;
+            max-width: 780px;
             font-size: clamp(2rem, 5vw, 4rem);
             line-height: 1.05;
             margin: 0 0 1rem 0;
@@ -359,36 +398,135 @@ def style_app() -> None:
           .hero p {{
             color: rgba(255,255,255,.92);
             max-width: 680px;
-            font-size: 1.05rem;
+            font-size: 1.08rem;
+            line-height: 1.7;
           }}
           .muted {{
             color: {muted};
           }}
+          .hero-actions {{
+            display: flex;
+            gap: .8rem;
+            margin-top: 1.4rem;
+            flex-wrap: wrap;
+          }}
+          .hero-stat-row {{
+            display: flex;
+            gap: .75rem;
+            flex-wrap: wrap;
+            margin-top: 1.8rem;
+          }}
+          .hero-stat {{
+            min-width: 130px;
+            background: rgba(255,255,255,.14);
+            border: 1px solid rgba(255,255,255,.24);
+            border-radius: 16px;
+            padding: .85rem 1rem;
+            backdrop-filter: blur(10px);
+          }}
+          .hero-stat b {{
+            display: block;
+            font-size: 1.35rem;
+            color: white;
+          }}
+          .hero-stat span {{
+            color: rgba(255,255,255,.78);
+            font-size: .82rem;
+          }}
+          .section-kicker {{
+            color: #0891b2;
+            text-transform: uppercase;
+            font-size: .78rem;
+            font-weight: 800;
+            letter-spacing: .08em;
+            margin-bottom: .2rem;
+          }}
           .banner {{
-            background: #ecfeff;
-            color: #164e63;
-            border: 1px solid #a5f3fc;
-            padding: .9rem 1rem;
-            border-radius: 8px;
+            background: {"#102b3c" if dark else "#ecfeff"};
+            color: {"#d7f9ff" if dark else "#164e63"};
+            border: 1px solid {"#155e75" if dark else "#a5f3fc"};
+            padding: 1rem 1.1rem;
+            border-radius: 16px;
             margin: 1rem 0;
           }}
           .emergency {{
-            background: #fff1f2;
-            color: #9f1239;
-            border: 1px solid #fecdd3;
-            padding: .9rem 1rem;
-            border-radius: 8px;
+            background: {"#3b121b" if dark else "#fff1f2"};
+            color: {"#fecdd3" if dark else "#9f1239"};
+            border: 1px solid {"#881337" if dark else "#fecdd3"};
+            padding: 1rem 1.1rem;
+            border-radius: 16px;
             margin: 1rem 0;
             font-weight: 700;
           }}
           .pill {{
             display: inline-block;
-            padding: .2rem .55rem;
+            padding: .35rem .7rem;
             border-radius: 999px;
-            background: #e0f2fe;
+            background: rgba(224, 242, 254, .95);
             color: #075985;
             font-size: .82rem;
             font-weight: 700;
+          }}
+          .feature-grid {{
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 1rem;
+            margin: 1.2rem 0 1.4rem;
+          }}
+          .feature-card {{
+            background: {surface};
+            border: 1px solid {line};
+            border-radius: 18px;
+            padding: 1.05rem;
+            min-height: 150px;
+            box-shadow: 0 14px 42px rgba(15, 23, 42, .08);
+          }}
+          .feature-icon {{
+            width: 40px;
+            height: 40px;
+            border-radius: 14px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(135deg, #14b8a6, #38bdf8);
+            color: white;
+            font-weight: 800;
+            margin-bottom: .75rem;
+          }}
+          .feature-card h3 {{
+            font-size: 1rem;
+            margin: 0 0 .35rem 0;
+          }}
+          .feature-card p {{
+            color: {muted};
+            margin: 0;
+            line-height: 1.55;
+            font-size: .92rem;
+          }}
+          .hospital-card h3 {{
+            font-size: 1.04rem;
+            margin: 0 0 .35rem;
+          }}
+          .hospital-meta {{
+            display: flex;
+            justify-content: space-between;
+            gap: .6rem;
+            margin: .7rem 0;
+          }}
+          .hospital-meta span {{
+            display: block;
+            background: {soft_surface};
+            border: 1px solid {line};
+            border-radius: 12px;
+            padding: .55rem;
+            flex: 1;
+            font-size: .85rem;
+          }}
+          .status-dot {{
+            display: inline-block;
+            width: .6rem;
+            height: .6rem;
+            border-radius: 50%;
+            margin-right: .35rem;
           }}
           .footer {{
             border-top: 1px solid {line};
@@ -399,6 +537,38 @@ def style_app() -> None:
           }}
           .nav-button button {{
             border-radius: 8px !important;
+          }}
+          .stButton > button {{
+            border-radius: 12px;
+            border: 1px solid {line};
+            color: {button_text};
+            font-weight: 700;
+          }}
+          .stButton > button[kind="primary"], .stFormSubmitButton button[kind="primary"] {{
+            background: linear-gradient(135deg, #0f766e, #0284c7);
+            color: white;
+            border: 0;
+          }}
+          div[data-testid="stDataFrame"] {{
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid {line};
+          }}
+          @media (max-width: 900px) {{
+            .feature-grid {{
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+            }}
+            .hero {{
+              padding: 2.4rem 1.4rem;
+            }}
+          }}
+          @media (max-width: 560px) {{
+            .feature-grid {{
+              grid-template-columns: 1fr;
+            }}
+            .hero-stat {{
+              min-width: 100%;
+            }}
           }}
         </style>
         """,
@@ -449,13 +619,17 @@ def render_hospital_cards(limit: int | None = None, specialist: str | None = Non
         with cols[index % len(cols)]:
             st.markdown(
                 f"""
-                <div class="care-card">
+                <div class="care-card hospital-card">
                   <h3>{hospital['name']}</h3>
                   <p class="muted">{hospital['location']} - {hospital['distance']} km away</p>
-                  <p><b>Beds:</b> <span style="color:{color};font-weight:800;">{hospital['beds']} {status}</span></p>
+                  <div class="hospital-meta">
+                    <span><b>{hospital['beds']}</b><br>Available beds</span>
+                    <span><b>{hospital['icu']}</b><br>ICU beds</span>
+                    <span><b>{hospital['rating']}</b><br>Rating</span>
+                  </div>
+                  <p><span class="status-dot" style="background:{color};"></span><b style="color:{color};">{status}</b> capacity</p>
                   <p><b>Contact:</b> {hospital['phone']}</p>
-                  <p><b>Emergency:</b> {'Available' if hospital['emergency'] else 'Not available'}</p>
-                  <p><b>Rating:</b> {hospital['rating']} / 5</p>
+                  <p><b>Emergency:</b> {'24/7 available' if hospital['emergency'] else 'Not available'}</p>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -466,10 +640,16 @@ def home_page() -> None:
     st.markdown(
         """
         <section class="hero">
-          <div>
+          <div class="hero-content">
             <span class="pill">Official Web Application</span>
             <h1>General Smart Medical Assistance System</h1>
             <p>Identify possible health conditions from symptoms, review treatment guidance, find hospitals, monitor bed availability, and manage appointments from one secure dashboard.</p>
+            <div class="hero-stat-row">
+              <div class="hero-stat"><b>24/7</b><span>Emergency guidance</span></div>
+              <div class="hero-stat"><b>4</b><span>Nearby hospitals</span></div>
+              <div class="hero-stat"><b>133</b><span>Open beds tracked</span></div>
+              <div class="hero-stat"><b>5</b><span>Disease pathways</span></div>
+            </div>
           </div>
         </section>
         """,
@@ -496,6 +676,35 @@ def home_page() -> None:
     with c3:
         st.info("Demo credentials: patient@example.com / demo123")
 
+    st.markdown(
+        """
+        <div class="feature-grid">
+          <div class="feature-card">
+            <div class="feature-icon">01</div>
+            <h3>Symptom Intelligence</h3>
+            <p>Structured symptom entry, severity scoring, and triage-style prediction results.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">02</div>
+            <h3>Hospital Matching</h3>
+            <p>Compare nearby hospitals by specialty, distance, ratings, beds, and emergency support.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">03</div>
+            <h3>Care Coordination</h3>
+            <p>Book appointments, upload reports, review alerts, and keep patient records together.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">04</div>
+            <h3>Admin Analytics</h3>
+            <p>Monitor bed occupancy, disease trends, appointment activity, and audit events.</p>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown('<div class="section-kicker">Nearby care network</div>', unsafe_allow_html=True)
     st.subheader("Nearby Hospitals")
     render_hospital_cards()
 
