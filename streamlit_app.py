@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import random
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -13,8 +14,9 @@ import streamlit as st
 
 
 BASE_DIR = Path(__file__).resolve().parent
+USER_STORE_FILE = BASE_DIR / "users.json"
 
-USERS = {
+DEFAULT_USERS = {
     "patient@example.com": {
         "password_hash": hashlib.sha256("demo123".encode()).hexdigest(),
         "mobile": "9876543210",
@@ -223,10 +225,41 @@ def password_hash(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
 
+def load_users() -> dict[str, dict[str, Any]]:
+    if not USER_STORE_FILE.exists():
+        save_users(DEFAULT_USERS)
+        return DEFAULT_USERS.copy()
+
+    try:
+        users = json.loads(USER_STORE_FILE.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        users = {}
+
+    if not isinstance(users, dict):
+        users = {}
+
+    merged = DEFAULT_USERS.copy()
+    for email, user in users.items():
+        if isinstance(email, str) and isinstance(user, dict):
+            merged[email.lower()] = user
+    return merged
+
+
+def save_users(users: dict[str, dict[str, Any]]) -> None:
+    USER_STORE_FILE.write_text(json.dumps(users, indent=2), encoding="utf-8")
+
+
+def save_registered_user(email: str, user: dict[str, Any]) -> None:
+    users = load_users()
+    users[email.lower()] = user
+    save_users(users)
+
+
 def auth_user(email: str, password: str) -> tuple[bool, str]:
     normalized_email = email.strip().lower()
-    user = USERS.get(normalized_email)
+    user = load_users().get(normalized_email)
     if user and user["password_hash"] == password_hash(password):
+        st.session_state.setdefault("audit_logs", [])
         st.session_state.logged_in = True
         st.session_state.user = {**user, "email": normalized_email}
         st.session_state.audit_logs.append(f"Login success: {normalized_email} at {datetime.now().strftime('%H:%M')}")
@@ -757,7 +790,7 @@ def register_page() -> None:
         elif not full_name or not email or not mobile or not password:
             st.error("Please complete all required fields.")
         else:
-            USERS[email.lower()] = {
+            save_registered_user(email, {
                 "password_hash": password_hash(password),
                 "mobile": mobile,
                 "name": full_name,
@@ -767,7 +800,7 @@ def register_page() -> None:
                 "insurance": "Not added",
                 "history": [],
                 "diagnoses": [],
-            }
+            })
             st.success("Registration completed. Please login.")
             set_page("Login")
 
