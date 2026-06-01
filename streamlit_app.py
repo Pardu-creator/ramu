@@ -349,9 +349,8 @@ def style_app() -> None:
     st.markdown(
         f"""
         <style>
-          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
           html, body, [class*="css"] {{
-            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
           }}
           .stApp {{
             background:
@@ -395,9 +394,9 @@ def style_app() -> None:
             border-radius: 24px;
             padding: 3.4rem 2.6rem;
             background:
-              linear-gradient(90deg, rgba(4, 47, 46, 0.92), rgba(14, 116, 144, 0.75), rgba(12, 74, 110, 0.46)),
-              url("https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=1600&q=80");
-            background-size: cover;
+              linear-gradient(120deg, rgba(4, 47, 46, 0.98), rgba(14, 116, 144, 0.88), rgba(12, 74, 110, 0.72)),
+              repeating-linear-gradient(135deg, rgba(255,255,255,.12) 0 1px, transparent 1px 22px);
+            background-size: auto;
             background-position: center;
             color: white;
             display: flex;
@@ -414,6 +413,19 @@ def style_app() -> None:
             height: 230px;
             border: 1px solid rgba(255, 255, 255, .22);
             border-radius: 999px;
+          }}
+          .hero:before {{
+            content: "";
+            position: absolute;
+            inset: 1.4rem 1.4rem auto auto;
+            width: min(34vw, 360px);
+            height: min(34vw, 360px);
+            background:
+              linear-gradient(90deg, rgba(255,255,255,.95) 48%, transparent 48% 52%, rgba(255,255,255,.95) 52%),
+              linear-gradient(0deg, rgba(255,255,255,.95) 48%, transparent 48% 52%, rgba(255,255,255,.95) 52%);
+            opacity: .11;
+            border-radius: 34px;
+            transform: rotate(-8deg);
           }}
           .hero-content {{
             position: relative;
@@ -579,6 +591,13 @@ def style_app() -> None:
             background: linear-gradient(135deg, #0f766e, #0284c7);
             color: white;
             border: 0;
+          }}
+          [data-testid="stStatusWidget"] {{
+            visibility: hidden;
+            height: 0;
+          }}
+          .stSpinner > div {{
+            border-top-color: #14b8a6 !important;
           }}
           div[data-testid="stDataFrame"] {{
             border-radius: 16px;
