@@ -5,8 +5,10 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote_plus
+from urllib.request import Request, urlopen
+import xml.etree.ElementTree as ET
 
-import feedparser
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -16,80 +18,36 @@ import yfinance as yf
 BASE_DIR = Path(__file__).resolve().parent
 COMPANY_FILE = BASE_DIR / "nifty500_companies.csv"
 CLIENT_FILE = BASE_DIR / "stock_clients.csv"
-WATCHLIST_FILE = BASE_DIR / "watchlist.json"
 MUTUAL_FUND_FILE = BASE_DIR / "mutual_funds.csv"
+WATCHLIST_FILE = BASE_DIR / "watchlist.json"
 
 VALID_RANGES = ["1D", "5D", "1M", "3M", "1Y"]
-MARKET_INDICES = {
-    "NIFTY 50": "^NSEI",
-    "SENSEX": "^BSESN",
+FALLBACK_STOCKS = {
+    "RELIANCE": {"company_name": "Reliance Industries Limited", "ticker": "RELIANCE.NS", "clients": {}},
+    "TCS": {"company_name": "Tata Consultancy Services Limited", "ticker": "TCS.NS", "clients": {}},
+    "INFY": {"company_name": "Infosys Limited", "ticker": "INFY.NS", "clients": {}},
+    "HDFCBANK": {"company_name": "HDFC Bank Limited", "ticker": "HDFCBANK.NS", "clients": {}},
+    "ICICIBANK": {"company_name": "ICICI Bank Limited", "ticker": "ICICIBANK.NS", "clients": {}},
+    "SBIN": {"company_name": "State Bank of India", "ticker": "SBIN.NS", "clients": {}},
+    "LT": {"company_name": "Larsen & Toubro Limited", "ticker": "LT.NS", "clients": {}},
+    "ITC": {"company_name": "ITC Limited", "ticker": "ITC.NS", "clients": {}},
 }
 
 
-st.set_page_config(
-    page_title="Stock Intelligence",
-    page_icon=":chart_with_upwards_trend:",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
+st.set_page_config(page_title="Stock Intelligence", page_icon=":chart_with_upwards_trend:", layout="wide")
 
 st.markdown(
     """
     <style>
-      :root {
-        --surface: #ffffff;
-        --muted: #5f6c7b;
-        --line: #d8e0ea;
-        --accent: #0f766e;
-        --danger: #b42318;
-      }
-      .main .block-container {
-        padding-top: 1.35rem;
-        padding-bottom: 2rem;
-      }
-      h1, h2, h3 {
-        letter-spacing: 0 !important;
-      }
+      .main .block-container { padding-top: 1.4rem; padding-bottom: 2rem; }
       [data-testid="stMetric"] {
-        background: var(--surface);
-        border: 1px solid var(--line);
+        background: #ffffff;
+        border: 1px solid #d8e0ea;
         border-radius: 8px;
-        padding: 0.85rem 1rem;
+        padding: 0.8rem 1rem;
       }
-      div[data-testid="stMetricValue"] {
-        font-size: 1.35rem;
-      }
-      .subtle {
-        color: var(--muted);
-        margin-top: -0.35rem;
-      }
-      .stock-title {
-        color: #152033;
-        font-size: 1.85rem;
-        font-weight: 750;
-        margin: 0;
-      }
-      .soft-panel {
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 1rem;
-        background: #fbfcfe;
-      }
-      .gain {
-        color: var(--accent);
-        font-weight: 700;
-      }
-      .loss {
-        color: var(--danger);
-        font-weight: 700;
-      }
-      .news-link {
-        display: block;
-        padding: 0.75rem 0;
-        border-bottom: 1px solid #e8edf4;
-        text-decoration: none;
-      }
+      .subtle { color: #64748b; margin-top: -0.35rem; }
+      .stock-title { color: #152033; font-size: 1.85rem; font-weight: 750; margin: 0; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -103,7 +61,6 @@ def normalize_symbol(symbol: str) -> str:
 def read_csv(path: Path) -> list[dict[str, str]]:
     if not path.exists():
         return []
-
     with path.open(mode="r", encoding="utf-8", newline="") as file:
         return list(csv.DictReader(file))
 
@@ -114,33 +71,29 @@ def load_stocks() -> dict[str, dict[str, Any]]:
 
     for row in read_csv(COMPANY_FILE):
         symbol = normalize_symbol(row.get("company_symbol", ""))
-        if not symbol:
-            continue
-
-        companies[symbol] = {
-            "company_name": row.get("company_name", "").strip(),
-            "ticker": row.get("ticker", "").strip(),
-            "clients": {},
-        }
+        if symbol:
+            companies[symbol] = {
+                "company_name": row.get("company_name", "").strip(),
+                "ticker": row.get("ticker", "").strip(),
+                "clients": {},
+            }
 
     for row in read_csv(CLIENT_FILE):
         symbol = normalize_symbol(row.get("company_symbol", ""))
         if symbol not in companies:
             continue
-
         client_name = row.get("client_name", "").strip()
         client_ticker = row.get("client_ticker", "").strip()
         if client_name and client_ticker:
             companies[symbol]["clients"][client_name] = client_ticker
 
-    return companies
+    return companies or FALLBACK_STOCKS
 
 
 @st.cache_data(show_spinner=False)
 def load_mutual_funds() -> pd.DataFrame:
     if not MUTUAL_FUND_FILE.exists():
         return pd.DataFrame(columns=["scheme_code", "amc", "category", "scheme_name", "nav", "nav_date"])
-
     funds = pd.read_csv(MUTUAL_FUND_FILE, dtype={"scheme_code": str})
     funds["nav"] = pd.to_numeric(funds["nav"], errors="coerce")
     return funds
@@ -149,39 +102,16 @@ def load_mutual_funds() -> pd.DataFrame:
 def load_watchlist() -> list[str]:
     if not WATCHLIST_FILE.exists():
         return []
-
     try:
         data = json.loads(WATCHLIST_FILE.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return []
-
-    if not isinstance(data, list):
-        return []
-
-    return [normalize_symbol(item) for item in data if isinstance(item, str) and item.strip()]
+    return [normalize_symbol(item) for item in data if isinstance(item, str) and item.strip()] if isinstance(data, list) else []
 
 
 def save_watchlist(watchlist: list[str]) -> None:
     unique_symbols = sorted(set(normalize_symbol(item) for item in watchlist if item.strip()))
     WATCHLIST_FILE.write_text(json.dumps(unique_symbols, indent=2), encoding="utf-8")
-
-
-def resolve_ticker(symbol_or_ticker: str) -> tuple[str, str, str]:
-    stocks = load_stocks()
-    normalized = normalize_symbol(symbol_or_ticker)
-
-    if normalized in stocks:
-        stock = stocks[normalized]
-        return normalized, stock["ticker"], stock["company_name"]
-
-    for symbol, stock in stocks.items():
-        if normalize_symbol(stock["ticker"]) == normalized:
-            return symbol, stock["ticker"], stock["company_name"]
-
-    if "." in normalized or normalized.startswith("^"):
-        return normalized, normalized, normalized
-
-    return normalized, f"{normalized}.NS", normalized
 
 
 def get_chart_settings(range_key: str) -> dict[str, str]:
@@ -196,12 +126,8 @@ def get_chart_settings(range_key: str) -> dict[str, str]:
 
 
 @st.cache_data(ttl=90, show_spinner=False)
-def get_live_quote(symbol_or_ticker: str) -> dict[str, Any]:
-    symbol, ticker, company_name = resolve_ticker(symbol_or_ticker)
-    quote: dict[str, Any] = {
-        "symbol": symbol,
-        "company_name": company_name,
-        "ticker": ticker,
+def get_live_quote(ticker: str) -> dict[str, Any]:
+    quote = {
         "price": None,
         "previous_close": None,
         "change": None,
@@ -210,7 +136,6 @@ def get_live_quote(symbol_or_ticker: str) -> dict[str, Any]:
         "market_state": None,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
-
     try:
         stock = yf.Ticker(ticker)
         fast_info = stock.fast_info
@@ -220,13 +145,10 @@ def get_live_quote(symbol_or_ticker: str) -> dict[str, Any]:
         market_state = fast_info.get("market_state")
 
         if not price:
-            history = stock.history(period="1d", interval="1m")
-            if history.empty:
-                history = stock.history(period="5d", interval="5m")
+            history = stock.history(period="5d", interval="5m")
             if not history.empty:
                 price = float(history["Close"].iloc[-1])
-                if not previous_close and len(history["Close"]) > 1:
-                    previous_close = float(history["Close"].iloc[0])
+                previous_close = previous_close or float(history["Close"].iloc[0])
 
         if price:
             quote["price"] = round(float(price), 2)
@@ -242,7 +164,6 @@ def get_live_quote(symbol_or_ticker: str) -> dict[str, Any]:
             quote["market_state"] = market_state
     except Exception:
         pass
-
     return quote
 
 
@@ -260,32 +181,37 @@ def get_chart_data(ticker: str, range_key: str) -> tuple[pd.DataFrame, dict[str,
         return pd.DataFrame(), {}
 
     chart = history.tail(90).reset_index()
-    time_column = chart.columns[0]
-    chart = chart.rename(columns={time_column: "time"})
+    chart = chart.rename(columns={chart.columns[0]: "time"})
     chart["time"] = pd.to_datetime(chart["time"]).dt.tz_localize(None)
-
     first_close = float(chart["Close"].iloc[0])
     last_close = float(chart["Close"].iloc[-1])
     change = round(last_close - first_close, 2)
-    change_percent = round((change / first_close) * 100, 2) if first_close else 0
 
-    stats = {
+    return chart, {
         "open": round(float(chart["Open"].iloc[0]), 2),
         "high": round(float(chart["High"].max()), 2),
         "low": round(float(chart["Low"].min()), 2),
         "close": round(last_close, 2),
         "change": change,
-        "change_percent": change_percent,
+        "change_percent": round((change / first_close) * 100, 2) if first_close else 0,
         "volume": int(chart["Volume"].sum()) if "Volume" in chart else 0,
     }
-    return chart, stats
 
 
 @st.cache_data(ttl=600, show_spinner=False)
 def get_news(stock: str) -> list[dict[str, str]]:
     try:
-        feed = feedparser.parse(f"https://news.google.com/rss/search?q={stock}+stock+market+india")
-        return [{"title": entry.title, "link": entry.link} for entry in feed.entries[:6]]
+        query = quote_plus(f"{stock} stock market india")
+        request = Request(f"https://news.google.com/rss/search?q={query}", headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(request, timeout=10) as response:
+            root = ET.fromstring(response.read())
+        items = []
+        for item in root.findall("./channel/item")[:6]:
+            title = item.findtext("title", default="").strip()
+            link = item.findtext("link", default="").strip()
+            if title and link:
+                items.append({"title": title, "link": link})
+        return items
     except Exception:
         return []
 
@@ -307,7 +233,6 @@ def stock_table(stocks: dict[str, dict[str, Any]]) -> pd.DataFrame:
 def format_money(value: Any, currency: str = "INR") -> str:
     if not isinstance(value, (int, float)):
         return "--"
-
     prefix = "Rs" if currency == "INR" else currency
     return f"{prefix} {value:,.2f}"
 
@@ -326,10 +251,8 @@ def render_price_chart(chart: pd.DataFrame, title: str) -> None:
     if chart.empty:
         st.info("No chart data was available for this range.")
         return
-
     rising = chart["Close"].iloc[-1] >= chart["Close"].iloc[0]
     line_color = "#0f766e" if rising else "#b42318"
-
     figure = go.Figure()
     figure.add_trace(
         go.Scatter(
@@ -362,7 +285,7 @@ def main() -> None:
     watchlist = load_watchlist()
 
     st.title("Stock Intelligence")
-    st.caption("Indian equities, listed client exposure, market headlines, watchlist ideas, and mutual fund NAVs.")
+    st.caption("Indian equities dashboard with quotes, charts, news, watchlist, and mutual fund search.")
 
     with st.sidebar:
         st.header("Controls")
@@ -392,7 +315,7 @@ def main() -> None:
 
         col_a, col_b = st.columns(2)
         with col_a:
-            if st.button("Refresh data", width="stretch"):
+            if st.button("Refresh", width="stretch"):
                 get_live_quote.clear()
                 get_chart_data.clear()
                 get_news.clear()
@@ -406,12 +329,8 @@ def main() -> None:
                 save_watchlist(watchlist + [selected_symbol])
                 st.rerun()
 
-        st.divider()
-        st.metric("Stock universe", f"{len(stocks_df):,}")
-        st.metric("Watchlist", len(watchlist))
-
     stock = stocks[selected_symbol]
-    quote = get_live_quote(selected_symbol)
+    quote = get_live_quote(stock["ticker"])
     chart, stats = get_chart_data(stock["ticker"], range_key)
 
     st.markdown(f"<p class='stock-title'>{stock['company_name']}</p>", unsafe_allow_html=True)
@@ -438,41 +357,36 @@ def main() -> None:
     )
 
     with tab_overview:
-        col_left, col_right = st.columns([1.2, 1])
-        with col_left:
-            st.subheader("Range stats")
-            st.dataframe(
-                pd.DataFrame(
-                    [
-                        {"Metric": "Open", "Value": format_money(stats.get("open"))},
-                        {"Metric": "Close", "Value": format_money(stats.get("close"))},
-                        {"Metric": "High", "Value": format_money(stats.get("high"))},
-                        {"Metric": "Low", "Value": format_money(stats.get("low"))},
-                        {"Metric": "Range change", "Value": f"{stats.get('change', '--')} ({stats.get('change_percent', '--')}%)"},
-                        {"Metric": "Client links", "Value": str(len(stock["clients"]))},
-                    ]
-                ),
-                width="stretch",
-                hide_index=True,
-            )
-        with col_right:
-            st.subheader("Watchlist")
-            if not watchlist:
-                st.info("No stocks are on the watchlist yet.")
-            else:
-                watched = stocks_df[stocks_df["symbol"].isin(watchlist)][["symbol", "company_name", "ticker"]]
-                st.dataframe(watched, width="stretch", hide_index=True)
+        st.subheader("Range stats")
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {"Metric": "Open", "Value": format_money(stats.get("open"))},
+                    {"Metric": "Close", "Value": format_money(stats.get("close"))},
+                    {"Metric": "High", "Value": format_money(stats.get("high"))},
+                    {"Metric": "Low", "Value": format_money(stats.get("low"))},
+                    {"Metric": "Range change", "Value": f"{stats.get('change', '--')} ({stats.get('change_percent', '--')}%)"},
+                    {"Metric": "Client links", "Value": str(len(stock["clients"]))},
+                ]
+            ),
+            width="stretch",
+            hide_index=True,
+        )
+        if not watchlist:
+            st.info("No stocks are on the watchlist yet.")
+        else:
+            watched = stocks_df[stocks_df["symbol"].isin(watchlist)][["symbol", "company_name", "ticker"]]
+            st.dataframe(watched, width="stretch", hide_index=True)
 
     with tab_clients:
-        st.subheader("Listed client exposure")
         clients = stock["clients"]
         if not clients:
-            st.info("No verified listed clients have been added for this stock yet.")
+            st.info("No verified listed clients are available for this stock.")
         else:
-            client_rows = []
+            rows = []
             for client_name, client_ticker in clients.items():
                 client_quote = get_live_quote(client_ticker)
-                client_rows.append(
+                rows.append(
                     {
                         "Client": client_name,
                         "Ticker": client_ticker,
@@ -480,17 +394,15 @@ def main() -> None:
                         "Change %": client_quote["change_percent"],
                     }
                 )
-            st.dataframe(pd.DataFrame(client_rows), width="stretch", hide_index=True)
+            st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
     with tab_screener:
-        st.subheader("Stock screener")
         st.dataframe(filtered.head(100), width="stretch", hide_index=True)
 
     with tab_funds:
-        st.subheader("Mutual fund NAV search")
-        fund_query = st.text_input("Search AMC, scheme, category, or code", key="fund_query")
         funds = load_mutual_funds()
-        if fund_query:
+        fund_query = st.text_input("Search AMC, scheme, category, or code")
+        if fund_query and not funds.empty:
             query = fund_query.strip().lower()
             funds = funds[
                 funds["scheme_code"].str.lower().str.contains(query, regex=False)
@@ -498,28 +410,18 @@ def main() -> None:
                 | funds["amc"].str.lower().str.contains(query, regex=False)
                 | funds["category"].str.lower().str.contains(query, regex=False)
             ]
-        st.caption(f"{len(funds):,} matching funds")
-        st.dataframe(
-            funds[["scheme_code", "amc", "category", "scheme_name", "nav", "nav_date"]].head(100),
-            width="stretch",
-            hide_index=True,
-        )
+        if funds.empty:
+            st.info("Add mutual_funds.csv to this folder to enable mutual fund search.")
+        else:
+            st.caption(f"{len(funds):,} matching funds")
+            st.dataframe(funds.head(100), width="stretch", hide_index=True)
 
     with tab_news:
-        st.subheader("Latest headlines")
         news = get_news(selected_symbol)
         if not news:
             st.info("No headlines were available right now.")
         for item in news:
             st.markdown(f"[{item['title']}]({item['link']})")
-
-        if watchlist:
-            st.divider()
-            st.subheader("Watchlist headlines")
-            for symbol in watchlist[:8]:
-                with st.expander(symbol):
-                    for item in get_news(symbol)[:4]:
-                        st.markdown(f"[{item['title']}]({item['link']})")
 
     st.caption("Market data is provided by Yahoo Finance through yfinance. News is loaded from Google News RSS.")
 
