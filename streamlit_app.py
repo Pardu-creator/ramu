@@ -223,17 +223,15 @@ def password_hash(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
 
-def auth_user(identifier: str, password: str, captcha: str) -> tuple[bool, str]:
-    if captcha.strip() != st.session_state.captcha:
-        return False, "CAPTCHA verification failed."
-    for email, user in USERS.items():
-        if identifier.strip().lower() == email or identifier.strip() == user["mobile"]:
-            if user["password_hash"] == password_hash(password):
-                st.session_state.logged_in = True
-                st.session_state.user = {**user, "email": email}
-                st.session_state.audit_logs.append(f"Login success: {email} at {datetime.now().strftime('%H:%M')}")
-                return True, "Login successful."
-    return False, "Invalid email/mobile or password."
+def auth_user(email: str, password: str) -> tuple[bool, str]:
+    normalized_email = email.strip().lower()
+    user = USERS.get(normalized_email)
+    if user and user["password_hash"] == password_hash(password):
+        st.session_state.logged_in = True
+        st.session_state.user = {**user, "email": normalized_email}
+        st.session_state.audit_logs.append(f"Login success: {normalized_email} at {datetime.now().strftime('%H:%M')}")
+        return True, "Login successful."
+    return False, "Invalid email or password."
 
 
 def risk_color(risk: str) -> str:
@@ -723,27 +721,21 @@ def home_page() -> None:
 
 def login_page() -> None:
     st.title("Secure Login")
-    st.caption("Use email or mobile number with password and CAPTCHA verification.")
+    st.caption("Use your registered email and password.")
     with st.form("login_form"):
-        identifier = st.text_input("Email or mobile number")
+        email = st.text_input("Email", placeholder="patient@example.com")
         password = st.text_input("Password", type="password")
-        remember = st.checkbox("Remember me")
-        st.write(f"CAPTCHA code: **{st.session_state.captcha}**")
-        captcha = st.text_input("Enter CAPTCHA")
         submitted = st.form_submit_button("Login", type="primary")
     if submitted:
-        ok, message = auth_user(identifier, password, captcha)
+        ok, message = auth_user(email, password)
         if ok:
             st.success(message)
             set_page("Dashboard")
             st.rerun()
         else:
             st.error(message)
-            st.session_state.captcha = str(random.randint(1000, 9999))
     if st.button("Forgot password"):
-        st.info("Password reset workflow would send a secure OTP link to registered email/mobile.")
-    if remember:
-        st.caption("Remember-me selected. In production, this would use a secure signed session cookie.")
+        st.info("Password reset workflow would send a secure reset link to your registered email.")
 
 
 def register_page() -> None:
